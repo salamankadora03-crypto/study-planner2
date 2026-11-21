@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>جدول المذاكرة</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#10141f;--card:#1a2030;--line:#2a3350;--text:#eef1f8;--mute:#8b95b3;--ok:#3ddc97}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Tajawal',system-ui,sans-serif;background:var(--bg);color:var(--text);padding:16px;max-width:560px;margin:auto;min-height:100vh}
+header{padding:8px 0 18px}
+h1{font-size:26px;font-weight:800}
+.sub{color:var(--mute);font-size:14px;margin-top:4px}
+.total{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px;margin-bottom:16px}
+.total .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.big{font-size:44px;font-weight:800;line-height:1;color:var(--ok)}
+.big small{font-size:18px;color:var(--mute);font-weight:500}
+.bar{height:14px;background:#0c101a;border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:99px;background:var(--c,var(--ok));transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:14px;border-inline-start:6px solid var(--c)}
+.top{display:flex;align-items:center;gap:12px}
+.ico{font-size:28px}
+.name{flex:1}
+.name b{font-size:20px;font-weight:800;display:block}
+.name span{font-size:13px;color:var(--mute)}
+.chk{width:54px;height:54px;border-radius:16px;border:2.5px solid var(--line);background:#0c101a;color:transparent;font-size:28px;font-weight:800;cursor:pointer;transition:.2s}
+.chk.on{background:var(--c);border-color:var(--c);color:#10141f}
+.today{margin:14px 0 8px;display:flex;justify-content:space-between;font-size:14px;color:var(--mute)}
+.today b{color:var(--text)}
+.owed{color:#ffb454}
+.btns{display:flex;gap:8px;margin-top:12px}
+.btns button,.btns input{flex:1;min-width:0;border-radius:12px;border:1px solid var(--line);background:#0c101a;color:var(--text);font:inherit;font-size:15px;padding:11px 4px;text-align:center}
+.btns button{cursor:pointer}
+.btns button:active{background:var(--c);color:#10141f}
+.btns .add{flex:1.3;background:var(--c);color:#10141f;font-weight:800;border-color:var(--c)}
+.undo{background:none;border:none;color:var(--mute);font:inherit;font-size:12px;margin-top:10px;cursor:pointer;text-decoration:underline}
+button:disabled,input:disabled{opacity:.35;cursor:not-allowed}
+.card.done{background:#15271f;border-color:#2c5c45}
+.card.done .chk:disabled{opacity:1}
+footer{text-align:center;margin:20px 0 40px}
+footer button{background:none;border:1px solid var(--line);color:var(--mute);font:inherit;padding:10px 18px;border-radius:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>جدول المذاكرة</h1>
+  <div class="sub" id="sub"></div>
+</header>
+
+<section class="total">
+  <div class="row"><div class="big"><span id="tp">0</span><small> / 100</small></div><div class="sub" id="tt"></div></div>
+  <div class="bar"><i id="tb"></i></div>
+</section>
+
+<main id="list"></main>
+<footer><button id="reset">بدء من جديد</button></footer>
+
+<script>
+const SUBJECTS=[
+  {n:'كيمياء',i:'⚗️',c:'#4cc9f0'},
+  {n:'فيزياء',i:'⚛️',c:'#b388ff'},
+  {n:'أحياء',i:'🧬',c:'#3ddc97'},
+  {n:'رياضيات',i:'📐',c:'#ffb454'}
+];
+const DAY=120, DAYS=15, CHAPTER=DAY*DAYS; // 120 دقيقة يومياً × 15 يوم
+const KEY='study_planner_v1';
+let S;
+
+function today(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()}
+function load(){
+  try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+  if(!S||!S.logs)S={start:today(),logs:[[],[],[],[]]};
+  S.logs=S.logs.map(l=>l.map(x=>typeof x==='number'?{d:S.start,m:x}:x)); // تحويل البيانات القديمة
+}
+const todayMin=i=>S.logs[i].filter(x=>x.d===today()).reduce((a,x)=>a+x.m,0);
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function elapsed(){ // عدد الأيام الحقيقية منذ البداية
+  const p=S.start.split('-').map(Number),a=new Date(p[0],p[1]-1,p[2]),t=new Date();
+  const b=new Date(t.getFullYear(),t.getMonth(),t.getDate());
+  return Math.round((b-a)/864e5)+1;
+}
+const sum=a=>a.reduce((x,y)=>x+y.m,0);
+const fmt=m=>{m=Math.round(m);const h=Math.floor(m/60),r=m%60;return h?(r?h+' س '+r+' د':h+' س'):r+' د'};
+
+function add(i,m){
+  m=Math.round(m);if(!(m>0))return;
+  const left=DAY-todayMin(i);
+  if(left<=0)return;            // اكتملت ساعتا اليوم: لا إضافة
+  S.logs[i].push({d:today(),m:Math.min(m,left)});save();render();
+}
+function undo(i){S.logs[i].pop();save();render()}
+
+function render(){
+  const days=elapsed();
+  let totalPct=0;
+  document.getElementById('list').innerHTML=SUBJECTS.map((s,i)=>{
+    const done=sum(S.logs[i]);
+    const chapter=Math.floor(done/CHAPTER)+1;
+    const inCh=done-(chapter-1)*CHAPTER;
+    const pct=inCh/CHAPTER*100;
+    totalPct+=pct;
+    const dayNo=Math.floor(inCh/DAY)+1;
+    const doneToday=todayMin(i);        // ما قرأته اليوم
+    const left=DAY-doneToday;           // المتبقي لإنهاء ساعتي اليوم
+    const full=left<=0;
+    const owed=Math.max(0,days*DAY-done); // الدين التراكمي حسب أيام التقويم
+    const c=full?'#3ddc97':s.c;
+    const dis=full?'disabled':'';
+    return `<article class="card ${full?'done':''}" style="--c:${c}">
+      <div class="top">
+        <div class="ico">${s.i}</div>
+        <div class="name"><b>${s.n}</b><span>الفصل ${chapter} · اليوم ${dayNo} من ${DAYS}</span></div>
+        <button class="chk ${full?'on':''}" onclick="add(${i},${left})" ${dis} aria-label="إنهاء اليوم">✓</button>
+      </div>
+      <div class="today">
+        <span>${full?'<b>انتهى اليوم ✓ (ساعتان)</b>':'المتبقي لإنهاء اليوم: <b>'+fmt(left)+'</b>'}</span>
+        <span class="owed">${owed>0?'متأخر: '+fmt(owed):'على الجدول ✓'}</span>
+      </div>
+      <div class="bar"><i style="width:${full?100:doneToday/DAY*100}%"></i></div>
+      <div class="btns">
+        <button ${dis} onclick="add(${i},15)">+15</button>
+        <button ${dis} onclick="add(${i},30)">+30</button>
+        <input ${dis} type="number" inputmode="numeric" min="1" max="${left}" placeholder="دقائق" id="m${i}">
+        <button ${dis} class="add" onclick="add(${i},+document.getElementById('m${i}').value)">سجّل</button>
+      </div>
+      ${S.logs[i].length?`<button class="undo" onclick="undo(${i})">تراجع عن آخر تسجيل (${fmt(S.logs[i][S.logs[i].length-1].m)})</button>`:''}
+    </article>`;
+  }).join('');
+  const avg=totalPct/SUBJECTS.length;
+  document.getElementById('tp').textContent=Math.floor(avg);
+  document.getElementById('tb').style.width=avg+'%';
+  document.getElementById('tt').textContent='اليوم الحقيقي '+days;
+  document.getElementById('sub').textContent='ساعتان يومياً لكل مادة · 15 يوماً لكل فصل';
+}
+
+document.getElementById('reset').onclick=()=>{
+  if(confirm('سيتم حذف كل التقدم. متأكد؟')){S={start:today(),logs:[[],[],[],[]]};save();render()}
+};
+load();render();
+</script>
+</body>
+</html>
